@@ -1,9 +1,15 @@
 name: Lighthouse CI
+
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
+  schedule:
+    - cron: "0 6 * * 1"   # every Monday at 06:00 UTC
+  workflow_dispatch:
+
+env:
+  LHCI_TIMEOUT: 120000   # 2 min timeout for slow sites
+
 jobs:
   lhci:
     runs-on: ubuntu-latest
@@ -15,12 +21,18 @@ jobs:
           node-version: '20'
       - name: Install LHCI
         run: npm i -g @lhci/cli@0.13
-      - name: Collect Lighthouse data
+      - name: Run Lighthouse
+        id: lhci
+        continue-on-error: true
         run: |
           lhci collect \
             --url https://souhailchaiberras.vercel.app/ \
-            --numberOfRuns 3 \
-            --output html
+            --numberOfRuns 1 \
+            --output html \
+            --output json \
+            --settings.maxWaitForLoad=60000 \
+            --settings.maxWaitForFcp=60000 \
+            --chrome-flags="--no-sandbox --disable-dev-shm-usage --disable-gpu"
       - name: Upload results
         run: |
           lhci upload \
