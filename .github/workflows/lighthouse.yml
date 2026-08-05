@@ -1,0 +1,29 @@
+name: Lighthouse CI
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+jobs:
+  lhci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Node
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+      - name: Install LHCI
+        run: npm i -g @lhci/cli@0.13
+      - name: Collect Lighthouse data
+        run: |
+          lhci collect \
+            --url https://souhailchaiberras.vercel.app/ \
+            --numberOfRuns 3 \
+            --output html
+      - name: Upload results
+        run: |
+          lhci upload \
+            --target "temporary-public-storage"
+        env:
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.GITHUB_TOKEN }}
