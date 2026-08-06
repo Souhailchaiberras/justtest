@@ -7,20 +7,26 @@ on:
     - cron: "0 6 * * 1"   # every Monday at 06:00 UTC
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 env:
-  LHCI_TIMEOUT: 120000   # 2 min timeout for slow sites
+  LHCI_TIMEOUT: 120000
 
 jobs:
   lhci:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
+
       - name: Install Node
         uses: actions/setup-node@v3
         with:
           node-version: '20'
+
       - name: Install LHCI
         run: npm i -g @lhci/cli@0.13
+
       - name: Run Lighthouse
         id: lhci
         continue-on-error: true
@@ -28,14 +34,65 @@ jobs:
           lhci collect \
             --url https://souhailchaiberras.vercel.app/ \
             --numberOfRuns 1 \
-            --output html \
             --output json \
             --settings.maxWaitForLoad=60000 \
             --settings.maxWaitForFcp=60000 \
             --chrome-flags="--no-sandbox --disable-dev-shm-usage --disable-gpu"
-      - name: Upload results
+
+      - name: Parse and append Lighthouse results
         run: |
-          lhci upload \
-            --target "temporary-public-storage"
-        env:
-          LHCI_GITHUB_APP_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LH_FILE="monitoring/lighthouse-history.json"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+
+          # Create history file if missing
+          if [ ! -f "$LH_FILE" ]; then
+            echo "[]" > "$LH_FILE"
+          fi
+
+          # Find latest lhci report JSON
+          REPORT=$(find .lighthouseci -name "*.json" ! -name "manifest.json" | head -1)
+          if [ -z "$REPORT" ]; then
+            echo "No Lighthouse report found, skipping."
+            exit 0
+          fi
+
+          python3 - <<EOF
+          import json, os
+
+          with open("$REPORT") as f:
+              r = json.load(f)
+
+          cats = r.get("categories", {})
+          audits = r.get("audits", {})
+
+          entry = {
+            "timestamp": "$TIMESTAMP",
+            "performance":    round((cats.get("performance",    {}).get("score", 0) or 0) * 100),
+            "accessibility":  round((cats.get("accessibility",  {}).get("score", 0) or 0) * 100),
+            "best_practices": round((cats.get("best-practices", {}).get("score", 0) or 0) * 100),
+            "seo":            round((cats.get("seo",            {}).get("score", 0) or 0) * 100),
+            "fcp_ms":  round((audits.get("first-contentful-paint",  {}).get("numericValue", 0) or 0)),
+            "lcp_ms":  round((audits.get("largest-contentful-paint",{}).get("numericValue", 0) or 0)),
+            "tbt_ms":  round((audits.get("total-blocking-time",     {}).get("numericValue", 0) or 0)),
+            "cls":     round((audits.get("cumulative-layout-shift",  {}).get("numericValue", 0) or 0), 4),
+          }
+
+          with open("$LH_FILE") as f:
+              history = json.load(f)
+
+          history.append(entry)
+          history = history[-52:]   # keep ~1 year of weekly runs
+
+          with open("$LH_FILE", "w") as f:
+              json.dump(history, f, indent=2)
+
+          print(json.dumps(entry, indent=2))
+          EOF
+
+      - name: Commit Lighthouse history
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add monitoring/lighthouse-history.json
+          git diff --staged --quiet || git commit -m "chore: lighthouse run $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push

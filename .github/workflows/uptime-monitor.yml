@@ -1,12 +1,19 @@
 name: Uptime Monitor
+
 on:
   schedule:
     - cron: "0 * * * *" # every hour
   workflow_dispatch:
+
+permissions:
+  contents: write
+
 jobs:
   ping:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+
       - name: Ping website
         id: ping
         run: |
@@ -15,11 +22,75 @@ jobs:
           END=$(date +%s%3N)
           LATENCY=$((END-START))
           echo "http_code=$HTTP_CODE" >> $GITHUB_OUTPUT
-          echo "latency=$LATENCY" >> $GITHUB_OUTPUT
+          echo "latency=$LATENCY"     >> $GITHUB_OUTPUT
+
+      - name: Get SSL expiry
+        id: ssl
+        run: |
+          EXPIRY=$(echo | openssl s_client -connect souhailchaiberras.vercel.app:443 -servername souhailchaiberras.vercel.app 2>/dev/null \
+            | openssl x509 -noout -enddate 2>/dev/null \
+            | sed 's/notAfter=//')
+          if [ -n "$EXPIRY" ]; then
+            EXPIRY_EPOCH=$(date -d "$EXPIRY" +%s 2>/dev/null || date -j -f "%b %d %T %Y %Z" "$EXPIRY" +%s 2>/dev/null || echo 0)
+            NOW_EPOCH=$(date +%s)
+            DAYS_LEFT=$(( (EXPIRY_EPOCH - NOW_EPOCH) / 86400 ))
+          else
+            DAYS_LEFT=-1
+          fi
+          echo "days_left=$DAYS_LEFT" >> $GITHUB_OUTPUT
+
+      - name: Determine status
+        id: status
+        run: |
+          CODE="${{ steps.ping.outputs.http_code }}"
+          LAT="${{ steps.ping.outputs.latency }}"
+          if [ "$CODE" = "200" ] && [ "$LAT" -lt 3000 ]; then
+            echo "status=up" >> $GITHUB_OUTPUT
+          elif [ "$CODE" = "200" ]; then
+            echo "status=degraded" >> $GITHUB_OUTPUT
+          else
+            echo "status=down" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Append to metrics.json
+        run: |
+          METRICS_FILE="monitoring/metrics.json"
+          TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+          NEW_ENTRY=$(printf '{"timestamp":"%s","status":"%s","http_code":%s,"latency_ms":%s,"ssl_days_left":%s}' \
+            "$TIMESTAMP" \
+            "${{ steps.status.outputs.status }}" \
+            "${{ steps.ping.outputs.http_code }}" \
+            "${{ steps.ping.outputs.latency }}" \
+            "${{ steps.ssl.outputs.days_left }}")
+
+          # Create file with empty array if missing
+          if [ ! -f "$METRICS_FILE" ]; then
+            echo "[]" > "$METRICS_FILE"
+          fi
+
+          # Append entry, keep last 720 entries (30 days × 24 checks)
+          python3 - <<EOF
+          import json, sys
+          with open("$METRICS_FILE") as f:
+              data = json.load(f)
+          data.append($NEW_ENTRY)
+          data = data[-720:]
+          with open("$METRICS_FILE", "w") as f:
+              json.dump(data, f, indent=2)
+          EOF
+
+      - name: Commit metrics
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add monitoring/metrics.json
+          git diff --staged --quiet || git commit -m "chore: uptime check $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push
+
       - name: Send alert if down
-        if: steps.ping.outputs.http_code != '200'
+        if: steps.status.outputs.status == 'down'
         uses: slackapi/slack-github-action@v1.23.0
         with:
-          payload: '{"text": "🚨 Site is down! HTTP {{steps.ping.outputs.http_code}} latency {{steps.ping.outputs.latency}}ms"}'
+          payload: '{"text": "🚨 Site is down! HTTP ${{ steps.ping.outputs.http_code }} latency ${{ steps.ping.outputs.latency }}ms"}'
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
