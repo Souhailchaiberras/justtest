@@ -1,0 +1,13 @@
+[
+  {
+    "timestamp": "2026-08-06T13:50:55Z",
+    "performance": 25,
+    "accessibility": 89,
+    "best_practices": 100,
+    "seo": 100,
+    "fcp_ms": 6619,
+    "lcp_ms": 36264,
+    "tbt_ms": 208769,
+    "cls": 0.0001
+  }
+]
