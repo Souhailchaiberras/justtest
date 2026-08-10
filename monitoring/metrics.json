@@ -565,5 +565,12 @@
     "http_code": 200,
     "latency_ms": 157,
     "ssl_days_left": 46
+  },
+  {
+    "timestamp": "2026-08-10T23:25:18Z",
+    "status": "up",
+    "http_code": 200,
+    "latency_ms": 270,
+    "ssl_days_left": 46
   }
 ]
