@@ -1965,5 +1965,12 @@
     "http_code": 200,
     "latency_ms": 97,
     "ssl_days_left": 37
+  },
+  {
+    "timestamp": "2026-08-20T10:19:57Z",
+    "status": "up",
+    "http_code": 200,
+    "latency_ms": 115,
+    "ssl_days_left": 37
   }
 ]
