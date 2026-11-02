@@ -1,12 +1,5 @@
 [
   {
-    "timestamp": "2026-08-10T19:47:34Z",
-    "status": "up",
-    "http_code": 200,
-    "latency_ms": 97,
-    "ssl_days_left": 46
-  },
-  {
     "timestamp": "2026-08-10T20:31:16Z",
     "status": "up",
     "http_code": 200,
@@ -5038,5 +5031,12 @@
     "http_code": 200,
     "latency_ms": -495,
     "ssl_days_left": 88
+  },
+  {
+    "timestamp": "2026-11-02T11:49:55Z",
+    "status": "up",
+    "http_code": 200,
+    "latency_ms": 922,
+    "ssl_days_left": 87
   }
 ]
