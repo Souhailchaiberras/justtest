@@ -141,5 +141,16 @@
     "lcp_ms": 36578,
     "tbt_ms": 209657,
     "cls": 0
+  },
+  {
+    "timestamp": "2026-11-09T15:49:36Z",
+    "performance": 26,
+    "accessibility": 89,
+    "best_practices": 100,
+    "seo": 100,
+    "fcp_ms": 5461,
+    "lcp_ms": 36666,
+    "tbt_ms": 214036,
+    "cls": 0
   }
 ]
